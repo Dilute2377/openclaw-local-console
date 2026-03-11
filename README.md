@@ -8,9 +8,9 @@ This is currently a personal utility project for my own local workflow. Most of 
 
 ## Preview
 
-![OpenClaw Local Console preview](assets/console-preview-placeholder.svg)
+![OpenClaw Local Console preview](assets/console-preview.png)
 
-Current repository preview image is a placeholder slot. A fuller UI screenshot can be dropped into `assets/console-preview-placeholder.svg` later without changing the README structure.
+This preview uses a real local console screenshot with sensitive local details masked before publishing.
 
 ## What this project is
 

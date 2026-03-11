@@ -22,3 +22,4 @@ build/
 coverage/
 htmlcov/
 
+assets/raw-*.png
