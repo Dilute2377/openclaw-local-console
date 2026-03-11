@@ -1,37 +1,57 @@
 # OpenClaw Local Console
 
-OpenClaw Local Console is a lightweight local web console for managing an OpenClaw installation on Windows.
+OpenClaw Local Console is a local web-based control panel for managing an OpenClaw installation on Windows.
 
-It focuses on the operational workflows that are easy to get wrong in terminal-first setups: environment checks, startup and shutdown, provider configuration, channel setup, token usage views, workspace document editing, and skill management.
+Instead of juggling terminal commands, config files, environment variables, and scattered setup steps, this project brings the most common OpenClaw operations into a single local UI.
 
-## What it does
+## Why this exists
 
-- Start, stop, and restart the OpenClaw gateway
-- Check runtime status, port, PID, and active profile
-- Configure providers, models, aliases, and related secrets
-- Manage channels and connection settings
-- View token usage by time range and model
-- Edit core workspace Markdown files used by OpenClaw
-- Install, inspect, search, and uninstall skills
-- Review logs and maintenance actions from one place
+OpenClaw is powerful, but real-world setup and maintenance can become fragmented:
 
-## Project structure
+- environment readiness lives in one place
+- provider and key setup lives in another
+- channel configuration is easy to misconfigure
+- workspace files and skills are hard to inspect from a single entrypoint
+- day-to-day operational checks still tend to fall back to CLI workflows
 
-- `app.py`: local HTTP server and backend API
-- `static/`: frontend HTML, CSS, and JavaScript
-- `scripts/encoding_guard.py`: encoding and line-ending checks
-- `run_console.bat`: local startup entrypoint
-- `notion_mcp_check.py`: helper for checking local Notion MCP availability
+This console is meant to reduce that friction and make OpenClaw easier to initialize, operate, and maintain locally.
 
-## What is intentionally not in this repository
+## Core capabilities
 
-This repository is intended to be safe to publish. It does not include:
+- Gateway lifecycle management
+  - start, stop, and restart the OpenClaw gateway
+  - inspect runtime health, port, PID, and active profile
+- Provider and secret management
+  - manage providers, models, aliases, and related secrets
+  - test supported API connections from the UI
+- Channel and connection management
+  - configure channels and connection settings from one place
+- Token usage visibility
+  - inspect usage across time ranges and model selections
+- Workspace editing
+  - read and edit OpenClaw core Markdown files used by the local workspace
+- Skill management
+  - inspect installed skills
+  - browse local candidates
+  - search online sources
+  - install and uninstall skills
+- Maintenance support
+  - review logs
+  - inspect maintenance actions
+  - prepare reset and uninstall workflows with guarded boundaries
 
-- your actual API keys or secrets
-- your local `~/.openclaw` workspace data
-- generated session files, logs, or caches
-- installed skill payloads from your machine
-- private environment variables
+## Tech overview
+
+- `app.py`
+  - local backend server and API layer
+- `static/`
+  - frontend HTML, CSS, and JavaScript
+- `scripts/encoding_guard.py`
+  - encoding and line-ending validation
+- `run_console.bat`
+  - local startup entrypoint
+- `notion_mcp_check.py`
+  - helper for checking local Notion MCP availability
 
 ## Local requirements
 
@@ -52,18 +72,31 @@ Then open the local address shown by the server, typically:
 http://127.0.0.1:8765
 ```
 
+## Repository boundaries
+
+This repository is intentionally kept safe to publish. It does not include:
+
+- real API keys or secrets
+- local `~/.openclaw` workspace data
+- generated sessions, logs, or caches
+- installed skill payloads copied from the machine
+- private environment variables
+
+The repository contains the console itself, not a bundled OpenClaw distribution.
+
+## Current scope
+
+This project is focused on local operations and management, not packaging OpenClaw as a hosted service.
+
+The console currently emphasizes:
+
+- local setup and environment readiness
+- operational visibility
+- provider, channel, and workspace management
+- skill installation and maintenance workflows
+
 ## Notes
 
 - The console operates against the local machine's OpenClaw directories and environment variables.
-- Some actions are intentionally scoped for safety, especially around maintenance and uninstall flows.
-- This repo contains the console itself, not a bundled OpenClaw distribution.
-
-## Publishing checklist
-
-Before pushing to GitHub, re-check:
-
-- no `.env` or local config exports were added
-- no `__pycache__`, logs, or generated files were staged
-- no local workspace files were copied into the repo
-- no screenshots or notes reveal private machine details
-
+- Some actions are intentionally conservative for safety, especially maintenance and uninstall flows.
+- This project currently targets practical usability on a Windows local setup.
