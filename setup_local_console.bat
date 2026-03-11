@@ -30,8 +30,21 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo [INFO] Running local preflight check...
+echo.
+python scripts\preflight_check.py
+if errorlevel 1 (
+  echo.
+  echo [ERROR] Preflight check could not complete.
+  pause
+  exit /b 1
+)
+
 echo [INFO] If your network needs a proxy for GitHub or model APIs, configure your own local proxy first.
 echo [INFO] This repository does not include any personal proxy values.
+echo.
+echo [INFO] Press any key to start the local console.
+pause >nul
 echo.
 echo [INFO] Starting the local console...
 echo.

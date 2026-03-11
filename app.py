@@ -245,7 +245,10 @@ def get_subprocess_kwargs(*, allow_console: bool = False) -> dict:
     return kwargs
 
 
-def run_command(args: list[str], timeout: int = 60) -> dict:
+def run_command(args: list[str], timeout: int = 60, env: dict | None = None) -> dict:
+    command_env = os.environ.copy()
+    if env:
+        command_env.update(env)
     try:
         completed = subprocess.run(
             args,
@@ -255,6 +258,7 @@ def run_command(args: list[str], timeout: int = 60) -> dict:
             errors="replace",
             timeout=timeout,
             shell=False,
+            env=command_env,
             **get_subprocess_kwargs(),
         )
         return {
@@ -1624,10 +1628,43 @@ def install_openclaw() -> dict:
         node_result = install_node()
         if not node_result["ok"]:
             return {"ok": False, "message": "Node.js install failed, so OpenClaw installation cannot continue.", "details": node_result}
-    result = run_command([get_npm_command(), "install", "-g", "openclaw@latest"], timeout=1800)
-    if result["ok"]:
-        return {"ok": True, "message": "OpenClaw installation completed.", "details": result}
-    return {"ok": False, "message": result["stderr"] or "OpenClaw installation failed.", "details": result}
+
+    official_result = run_command([get_npm_command(), "install", "-g", "openclaw@latest"], timeout=1800)
+    if official_result["ok"]:
+        return {
+            "ok": True,
+            "message": "OpenClaw installation completed from the default npm registry.",
+            "details": official_result,
+            "source": "official",
+        }
+
+    fallback_registry = "https://registry.npmmirror.com"
+    fallback_result = run_command(
+        [get_npm_command(), "install", "-g", "openclaw@latest"],
+        timeout=1800,
+        env={"npm_config_registry": fallback_registry},
+    )
+    if fallback_result["ok"]:
+        return {
+            "ok": True,
+            "message": "OpenClaw installation completed after retrying with a China mirror registry.",
+            "details": {
+                "official": official_result,
+                "fallback": fallback_result,
+                "fallbackRegistry": fallback_registry,
+            },
+            "source": "fallback",
+        }
+    return {
+        "ok": False,
+        "message": fallback_result["stderr"] or official_result["stderr"] or "OpenClaw installation failed.",
+        "details": {
+            "official": official_result,
+            "fallback": fallback_result,
+            "fallbackRegistry": fallback_registry,
+        },
+        "source": "failed",
+    }
 
 
 def execute_setup_action(action_id: str) -> dict:

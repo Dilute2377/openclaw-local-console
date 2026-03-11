@@ -50,6 +50,15 @@ cd openclaw-local-console
 setup_local_console.bat
 ```
 
+The setup helper now prints a local readiness report before launch. It tells the user whether:
+
+- the console itself can start
+- Node.js and npm are ready
+- OpenClaw CLI is already installed
+- the base OpenClaw config has been created
+
+If Python is available, the console can still open even when the full OpenClaw environment is incomplete.
+
 If you already know your environment is ready, you can also run:
 
 ```bat
@@ -72,6 +81,16 @@ http://127.0.0.1:8765
 - An existing or intended OpenClaw installation on the same machine
 
 The console itself can help with parts of local initialization, but this repository does not bundle OpenClaw as a standalone distribution.
+
+## Install retry behavior
+
+For new users, the local console currently uses this install strategy:
+
+- Python and Node.js install attempts use the default Windows tooling first
+- OpenClaw install tries the default npm registry first
+- if the OpenClaw npm install fails, the console automatically retries with a preset China mirror registry
+
+That means this repo is closer to a "copy the workflow" local starter than a fully zero-dependency installer. The setup helper is intended to make that status visible instead of leaving users guessing.
 
 ## Usage guide
 
