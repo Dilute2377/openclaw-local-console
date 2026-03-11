@@ -4,6 +4,8 @@ OpenClaw Local Console is a local web-based control panel for managing an OpenCl
 
 Instead of juggling terminal commands, config files, environment variables, and scattered setup steps, this project brings the most common OpenClaw operations into a single local UI.
 
+This is currently a personal utility project for my own local workflow. Most of the implementation work in this repository was written with Codex assistance, then iterated locally around real OpenClaw usage needs.
+
 ## Why this exists
 
 OpenClaw is powerful, but real-world setup and maintenance can become fragmented:
@@ -15,6 +17,8 @@ OpenClaw is powerful, but real-world setup and maintenance can become fragmented
 - day-to-day operational checks still tend to fall back to CLI workflows
 
 This console is meant to reduce that friction and make OpenClaw easier to initialize, operate, and maintain locally.
+
+It is still a practical, evolving tool rather than a polished general-purpose product. If you also use OpenClaw and have ideas, suggestions, or better workflow patterns, feedback is very welcome.
 
 ## Core capabilities
 
@@ -100,3 +104,4 @@ The console currently emphasizes:
 - The console operates against the local machine's OpenClaw directories and environment variables.
 - Some actions are intentionally conservative for safety, especially maintenance and uninstall flows.
 - This project currently targets practical usability on a Windows local setup.
+- It started as a personal self-use project, so some flows are optimized around that reality first and may continue to evolve over time.
