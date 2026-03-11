@@ -1,61 +1,62 @@
 # OpenClaw Local Console
 
-OpenClaw Local Console is a local web-based control panel for managing an OpenClaw installation on Windows.
+Language: **English** | [中文](README.zh-CN.md)
 
-Instead of juggling terminal commands, config files, environment variables, and scattered setup steps, this project brings the most common OpenClaw operations into a single local UI.
+OpenClaw Local Console is a local web control panel for managing an OpenClaw installation on Windows.
 
-This is currently a personal utility project for my own local workflow. Most of the implementation work in this repository was written with Codex assistance, then iterated locally around real OpenClaw usage needs.
+This is currently a personal utility project for my own local workflow. Most of the implementation work in this repository was written with Codex assistance, then iterated locally around real OpenClaw usage needs. It is still evolving, so suggestions and practical feedback from other OpenClaw users are very welcome.
 
-## Why this exists
+## What this project is
 
-OpenClaw is powerful, but real-world setup and maintenance can become fragmented:
+This project brings common OpenClaw operations into a single local UI instead of splitting them across:
 
-- environment readiness lives in one place
-- provider and key setup lives in another
-- channel configuration is easy to misconfigure
-- workspace files and skills are hard to inspect from a single entrypoint
-- day-to-day operational checks still tend to fall back to CLI workflows
+- terminal commands
+- config files
+- environment variables
+- setup scripts
+- workspace file edits
 
-This console is meant to reduce that friction and make OpenClaw easier to initialize, operate, and maintain locally.
+The goal is not to replace OpenClaw itself, but to make local setup, configuration, and maintenance easier to manage.
 
-It is still a practical, evolving tool rather than a polished general-purpose product. If you also use OpenClaw and have ideas, suggestions, or better workflow patterns, feedback is very welcome.
+## Main features
 
-## Core capabilities
+- Start, stop, and restart the OpenClaw gateway
+- Check runtime status, port, PID, and active profile
+- Manage providers, models, aliases, and related secrets
+- Configure channels and connection settings
+- View token usage by model and time range
+- Read and edit core OpenClaw workspace Markdown files
+- Inspect, install, search, and uninstall skills
+- Review logs and maintenance actions from one place
 
-- Gateway lifecycle management
-  - start, stop, and restart the OpenClaw gateway
-  - inspect runtime health, port, PID, and active profile
-- Provider and secret management
-  - manage providers, models, aliases, and related secrets
-  - test supported API connections from the UI
-- Channel and connection management
-  - configure channels and connection settings from one place
-- Token usage visibility
-  - inspect usage across time ranges and model selections
-- Workspace editing
-  - read and edit OpenClaw core Markdown files used by the local workspace
-- Skill management
-  - inspect installed skills
-  - browse local candidates
-  - search online sources
-  - install and uninstall skills
-- Maintenance support
-  - review logs
-  - inspect maintenance actions
-  - prepare reset and uninstall workflows with guarded boundaries
+## Quick start
 
-## Tech overview
+### 1. Clone the repository
 
-- `app.py`
-  - local backend server and API layer
-- `static/`
-  - frontend HTML, CSS, and JavaScript
-- `scripts/encoding_guard.py`
-  - encoding and line-ending validation
-- `run_console.bat`
-  - local startup entrypoint
-- `notion_mcp_check.py`
-  - helper for checking local Notion MCP availability
+```powershell
+git clone https://github.com/Dilute2377/openclaw-local-console.git
+cd openclaw-local-console
+```
+
+### 2. Start with the setup helper
+
+```bat
+setup_local_console.bat
+```
+
+If you already know your environment is ready, you can also run:
+
+```bat
+run_console.bat
+```
+
+### 3. Open the local console
+
+Usually:
+
+```text
+http://127.0.0.1:8765
+```
 
 ## Local requirements
 
@@ -64,17 +65,22 @@ It is still a practical, evolving tool rather than a polished general-purpose pr
 - Node.js installed locally
 - An existing or intended OpenClaw installation on the same machine
 
-## Run locally
+The console itself can help with parts of local initialization, but this repository does not bundle OpenClaw as a standalone distribution.
 
-```bat
-run_console.bat
-```
+## Usage guide
 
-Then open the local address shown by the server, typically:
+- English: [docs/USAGE.md](docs/USAGE.md)
+- 中文: [docs/USAGE.zh-CN.md](docs/USAGE.zh-CN.md)
 
-```text
-http://127.0.0.1:8765
-```
+## Proxy note
+
+My own local setup uses a V2Ray-based proxy for some network access scenarios, such as GitHub or provider connectivity. That is only an environment note, not a repository dependency.
+
+This repository does **not** include any real proxy address, local port, or personal proxy configuration. If another user needs a proxy, they should configure their own environment locally.
+
+## Window behavior note
+
+Some Windows CLI actions can briefly open and close a terminal window, especially when testing local commands or running helper processes. This is a Windows-side behavior note for local tooling, not a sign that the repository contains a persistent background monitor.
 
 ## Repository boundaries
 
@@ -85,23 +91,35 @@ This repository is intentionally kept safe to publish. It does not include:
 - generated sessions, logs, or caches
 - installed skill payloads copied from the machine
 - private environment variables
+- personal proxy values
 
-The repository contains the console itself, not a bundled OpenClaw distribution.
+## Project structure
 
-## Current scope
+- `app.py`
+  - local backend server and API layer
+- `static/`
+  - frontend HTML, CSS, and JavaScript
+- `scripts/encoding_guard.py`
+  - encoding and line-ending validation
+- `setup_local_console.bat`
+  - quick local setup and launch helper
+- `run_console.bat`
+  - direct local startup entrypoint
+- `notion_mcp_check.py`
+  - helper for checking local Notion MCP availability
 
-This project is focused on local operations and management, not packaging OpenClaw as a hosted service.
+## Scope
 
-The console currently emphasizes:
+This project is focused on local operations and management, not on packaging OpenClaw as a hosted service.
 
-- local setup and environment readiness
-- operational visibility
+It currently emphasizes:
+
+- local setup readiness
 - provider, channel, and workspace management
+- token visibility
 - skill installation and maintenance workflows
 
-## Notes
+## Feedback
 
-- The console operates against the local machine's OpenClaw directories and environment variables.
-- Some actions are intentionally conservative for safety, especially maintenance and uninstall flows.
-- This project currently targets practical usability on a Windows local setup.
-- It started as a personal self-use project, so some flows are optimized around that reality first and may continue to evolve over time.
+If you use OpenClaw and try this console, suggestions, bug reports, and workflow ideas are welcome.
+
