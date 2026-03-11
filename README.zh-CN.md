@@ -6,6 +6,12 @@ OpenClaw Local Console 是一个面向 Windows 本地环境的 OpenClaw 控制�
 
 这个项目目前主要是我自己日常在本地使用的工具。仓库里的大部分实现工作由 Codex 协助完成，再结合我自己真实使用 OpenClaw 的过程一点点往前迭代。它现在还是一个偏实用、持续打磨中的项目，如果你也在用 OpenClaw，欢迎提建议、反馈体验，或者告诉我哪些地方还能做得更顺手。
 
+## 项目预览
+
+![OpenClaw Local Console 预览图](assets/console-preview-placeholder.svg)
+
+仓库里现在先放了一个预览图占位位，后面可以直接把更完整的控制台截图替换到 `assets/console-preview-placeholder.svg`，不用再改 README 结构。
+
 ## 这个项目是做什么的
 
 它的目标不是替代 OpenClaw，而是把本地使用 OpenClaw 时那些最常见、也最容易散落在不同地方的操作，尽量收进一个统一入口，比如：

@@ -6,6 +6,12 @@ OpenClaw Local Console is a local web control panel for managing an OpenClaw ins
 
 This is currently a personal utility project for my own local workflow. Most of the implementation work in this repository was written with Codex assistance, then iterated locally around real OpenClaw usage needs. It is still evolving, so suggestions and practical feedback from other OpenClaw users are very welcome.
 
+## Preview
+
+![OpenClaw Local Console preview](assets/console-preview-placeholder.svg)
+
+Current repository preview image is a placeholder slot. A fuller UI screenshot can be dropped into `assets/console-preview-placeholder.svg` later without changing the README structure.
+
 ## What this project is
 
 This project brings common OpenClaw operations into a single local UI instead of splitting them across:
@@ -122,4 +128,3 @@ It currently emphasizes:
 ## Feedback
 
 If you use OpenClaw and try this console, suggestions, bug reports, and workflow ideas are welcome.
-
