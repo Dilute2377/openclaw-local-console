@@ -42,6 +42,7 @@ if errorlevel 1 (
 
 echo [INFO] If your network needs a proxy for GitHub or model APIs, configure your own local proxy first.
 echo [INFO] This repository does not include any personal proxy values.
+echo [INFO] Read the "Overall status" and "Recommended" lines above before continuing.
 echo.
 echo [INFO] Press any key to start the local console.
 pause >nul

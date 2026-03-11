@@ -2288,18 +2288,27 @@
       return result;
     };
 
+    const baseOnViewChange = window.onViewChange;
+    const loadedHeavyViews = new Set();
+    window.onViewChange = async (viewName) => {
+      await baseOnViewChange?.(viewName);
+      if (viewName === "tokens" && !loadedHeavyViews.has("tokens")) {
+        await refreshTokens();
+        loadedHeavyViews.add("tokens");
+      }
+      if (viewName === "permissions" && !loadedHeavyViews.has("permissions")) {
+        await refreshPermissions();
+        loadedHeavyViews.add("permissions");
+      }
+      if (viewName === "workspace" && !loadedHeavyViews.has("workspace")) {
+        await refreshWorkspace();
+        loadedHeavyViews.add("workspace");
+      }
+    };
+
     document.title = "OpenClaw 本地控制台";
 
     compactChannelsConnectionPanel();
-    Promise.all([
-      window.refreshStatus?.(),
-      window.refreshSetupGuide?.(),
-      window.refreshSecrets?.(),
-      window.refreshChannels?.(),
-      refreshTokens().catch(reportError),
-      refreshPermissions().catch(reportError),
-      refreshWorkspace().catch(reportError),
-    ]).catch(reportError);
   }
 
   if (document.readyState === "loading") {

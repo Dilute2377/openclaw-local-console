@@ -32,19 +32,24 @@ def main() -> int:
     console_ready = check["pythonAvailable"]
 
     print("OpenClaw Local Console Preflight")
+    print("=" * 42)
     print()
     for label, ok, detail in items:
         print(line(label, ok, detail))
 
     print()
     if full_ready:
-        print("Summary: This machine looks ready for the full local OpenClaw workflow.")
+        print("Overall status : FULLY READY")
+        print("Summary        : This machine looks ready for the full local OpenClaw workflow.")
+        print("Recommended    : You can start the console now and use the full OpenClaw workflow.")
     elif console_ready:
-        print("Summary: The console can start, but the full OpenClaw environment is not ready yet.")
-        print("Next: Open the console and use the setup guide to install or initialize the missing pieces.")
+        print("Overall status : CONSOLE READY, OPENCLAW INCOMPLETE")
+        print("Summary        : The console can start, but the full OpenClaw environment is not ready yet.")
+        print("Recommended    : Start the console, then follow the setup guide to install or initialize the missing pieces.")
     else:
-        print("Summary: The console cannot start yet because Python is missing.")
-        print("Next: Install Python first, then run setup_local_console.bat again.")
+        print("Overall status : BLOCKED")
+        print("Summary        : The console cannot start yet because Python is missing.")
+        print("Recommended    : Install Python first, then run setup_local_console.bat again.")
     return 0
 
 

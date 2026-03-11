@@ -7,6 +7,8 @@ const state = {
   busy: false,
   setupGuide: null,
   configTab: "provider",
+  currentView: "overview",
+  loadedViews: {},
 };
 
 const providerDefaults = {
@@ -452,11 +454,15 @@ function getViewForTarget(targetId) {
 }
 
 function switchView(viewName) {
+  state.currentView = viewName;
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === viewName);
   });
   document.querySelectorAll("[data-view-panel]").forEach((panel) => {
     panel.classList.toggle("active", panel.dataset.viewPanel === viewName);
+  });
+  Promise.resolve(window.onViewChange?.(viewName)).catch((error) => {
+    setResult(String(error?.message || error));
   });
 }
 
@@ -713,6 +719,25 @@ async function refreshLogs() {
   renderLogs(data.data);
 }
 
+async function loadViewData(viewName, options = {}) {
+  const force = Boolean(options.force);
+  if (!force && state.loadedViews[viewName]) return;
+
+  if (viewName === "overview") {
+    await Promise.all([refreshStatus(), refreshSelfCheck(), refreshSetupGuide()]);
+  } else if (viewName === "config") {
+    await refreshProfiles();
+  } else if (viewName === "channels") {
+    await Promise.all([refreshSecrets(), refreshChannels(), refreshConnectionSettings()]);
+  } else if (viewName === "logs") {
+    await refreshLogs();
+  }
+
+  state.loadedViews[viewName] = true;
+}
+
+window.onViewChange = (viewName) => loadViewData(viewName);
+
 async function clearLogs() {
   setBusy(true, "正在清空日志...");
   try {
@@ -722,392 +747,6 @@ async function clearLogs() {
   } finally {
     setBusy(false);
   }
-}
-
-async function applyProfile(fileName) {
-  setBusy(true, `正在应用 ${fileName}...`);
-  try {
-    const data = await request("/api/profiles/switch", {
-      method: "POST",
-      body: JSON.stringify({ fileName }),
-    });
-    setResult(data.message);
-    await Promise.all([refreshProfiles(), refreshStatus(), refreshChannels(), refreshLogs()]);
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function deleteProfile(fileName) {
-  const confirmed = window.confirm(`确定要删除 ${fileName} 吗？`);
-  if (!confirmed) return;
-  setBusy(true, `正在删除 ${fileName}...`);
-  try {
-    const data = await request("/api/profiles/delete", {
-      method: "POST",
-      body: JSON.stringify({ fileName }),
-    });
-    setResult(data.message);
-    await Promise.all([refreshProfiles(), refreshStatus(), refreshLogs()]);
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function createProviderProfile() {
-  const providerKey = document.getElementById("provider-key").value;
-  const profileName = document.getElementById("provider-profile-name").value.trim();
-  const modelId = document.getElementById("provider-model-id").value.trim();
-  const alias = document.getElementById("provider-alias").value.trim();
-  const apiKey = document.getElementById("provider-api-key").value.trim();
-  const applyNow = document.getElementById("provider-apply-now").checked;
-  const testNow = document.getElementById("provider-test-now").checked;
-  if (!providerKey || !profileName || !modelId) {
-    setResult("请先选择 Provider，并填写 Profile 名称和模型 ID。");
-    return;
-  }
-  setBusy(true, "正在创建新的 Provider Profile...");
-  try {
-    const data = await request("/api/profiles/create", {
-      method: "POST",
-      body: JSON.stringify({ providerKey, profileName, modelId, alias, apiKey, applyNow, testNow }),
-    });
-    document.getElementById("provider-api-key").value = "";
-    const summary = data.test?.preview ? `${data.message}\n\n测试返回：\n${data.test.preview}` : data.message;
-    setResult(summary);
-    await Promise.all([refreshProfiles(), refreshStatus(), refreshSecrets(), refreshSelfCheck(), refreshSetupGuide(), refreshLogs()]);
-    guideToNextStep({ preferTarget: true });
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function saveSecret() {
-  const key = document.getElementById("secret-key").value;
-  const value = document.getElementById("secret-value").value.trim();
-  if (!key || !value) {
-    setResult("请先选择目标密钥并填写内容。");
-    return;
-  }
-  setBusy(true, "正在保存密钥...");
-  try {
-    const data = await request("/api/secrets/set", {
-      method: "POST",
-      body: JSON.stringify({ key, value }),
-    });
-    document.getElementById("secret-value").value = "";
-    setResult(data.message);
-    await Promise.all([refreshSecrets(), refreshSelfCheck(), refreshSetupGuide(), refreshLogs()]);
-    guideToNextStep({ preferTarget: true });
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function deleteSecret(key) {
-  const match = state.secrets.find((item) => item.key === key);
-  const confirmed = window.confirm(`确定要清空 ${match?.label || key} 吗？`);
-  if (!confirmed) return;
-  setBusy(true, "正在清空密钥...");
-  try {
-    const data = await request("/api/secrets/delete", {
-      method: "POST",
-      body: JSON.stringify({ key }),
-    });
-    setResult(data.message);
-    await Promise.all([refreshSecrets(), refreshSelfCheck(), refreshSetupGuide(), refreshLogs()]);
-    guideToNextStep({ preferTarget: true });
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function saveChannel(channel, formData) {
-  const payload = { channel };
-  for (const [key, value] of formData.entries()) {
-    payload[key] = value;
-  }
-  payload.enabled = formData.get("enabled") === "on";
-  payload.streaming = formData.get("streaming") === "on";
-  setBusy(true, `正在保存 ${channel === "feishu" ? "飞书" : "Telegram"} 通道配置...`);
-  try {
-    const data = await request("/api/channels/save", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    setResult(data.message);
-    await Promise.all([refreshChannels(), refreshSecrets(), refreshSetupGuide(), refreshLogs(), refreshStatus()]);
-    guideToNextStep({ preferTarget: true });
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function deleteChannel(channel) {
-  const label = channel === "feishu" ? "飞书" : "Telegram";
-  const confirmed = window.confirm(`确定要删除 ${label} 通道配置吗？`);
-  if (!confirmed) return;
-  setBusy(true, `正在删除 ${label} 通道配置...`);
-  try {
-    const data = await request("/api/channels/delete", {
-      method: "POST",
-      body: JSON.stringify({ channel }),
-    });
-    setResult(data.message);
-    await Promise.all([refreshChannels(), refreshSetupGuide(), refreshLogs(), refreshStatus()]);
-    guideToNextStep({ preferTarget: true });
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function saveConnectionSettings() {
-  const gatewayPort = document.getElementById("connection-gateway-port").value.trim();
-  const proxyOverride = document.getElementById("connection-proxy-override").value.trim();
-  const timeoutSeconds = document.getElementById("connection-timeout-seconds").value.trim();
-  setBusy(true, "正在保存连接设置...");
-  try {
-    const data = await request("/api/connection-settings", {
-      method: "POST",
-      body: JSON.stringify({ gatewayPort, proxyOverride, timeoutSeconds }),
-    });
-    setResult(data.message);
-    await Promise.all([refreshConnectionSettings(), refreshStatus(), refreshSelfCheck(), refreshLogs()]);
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function testChannel(channel) {
-  const label = channel === "feishu" ? "飞书" : "Telegram";
-  setBusy(true, `正在测试 ${label} 通道，请稍等...`);
-  try {
-    const data = await request("/api/tests/channel", {
-      method: "POST",
-      body: JSON.stringify({ channel }),
-    });
-    setResult(`${data.message}\n\n${data.preview || ""}`);
-    await Promise.all([refreshChannels(), refreshSetupGuide(), refreshLogs(), refreshStatus()]);
-    guideToNextStep({ preferTarget: true });
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function executeSetupAction(actionId) {
-  const labels = {
-    install_python: "正在安装 Python，这一步可能需要几分钟...",
-    install_node: "正在安装 Node.js，这一步可能需要几分钟...",
-    install_openclaw: "正在安装 OpenClaw，请稍等...",
-    create_base_config: "正在创建 OpenClaw 基础配置和工作区骨架...",
-    start_gateway: "正在启动 OpenClaw，请稍等...",
-    test_primary_provider: "正在测试当前主力 Provider，请稍等...",
-    test_feishu_channel: "正在测试飞书通道，请稍等...",
-    test_telegram_channel: "正在测试 Telegram 通道，请稍等...",
-  };
-  setBusy(true, labels[actionId] || "正在执行安装/初始化动作...");
-  try {
-    const data = await request("/api/setup/action", {
-      method: "POST",
-      body: JSON.stringify({ actionId }),
-    });
-    setResult(data.message);
-    await Promise.all([refreshSelfCheck(), refreshSetupGuide(), refreshLogs(), refreshStatus()]);
-    guideToNextStep({ preferTarget: true });
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function callGateway(action) {
-  const labels = {
-    start: "正在启动 OpenClaw，请稍等...",
-    stop: "正在关闭 OpenClaw，请稍等...",
-    restart: "正在重启 OpenClaw，请稍等...",
-  };
-  setBusy(true, labels[action] || "正在处理，请稍等...");
-  try {
-    const data = await request(`/api/gateway/${action}`, { method: "POST", body: "{}" });
-    setResult(data.message);
-    await Promise.all([refreshStatus(), refreshLogs(), refreshSetupGuide()]);
-    guideToNextStep({ preferTarget: true });
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function testProvider(providerKey) {
-  setBusy(true, `正在测试 ${providerKey}，请稍等...`);
-  try {
-    const data = await request("/api/tests/provider", {
-      method: "POST",
-      body: JSON.stringify({ providerKey }),
-    });
-    setResult(`${data.message}\n\n${data.preview || ""}`);
-  } catch (error) {
-    setResult(String(error.message || error));
-  }
-  await Promise.all([refreshLogs(), refreshSetupGuide(), refreshStatus()]);
-  guideToNextStep({ preferTarget: true });
-  setBusy(false);
-}
-
-function syncProviderFormDefaults() {
-  const providerKey = document.getElementById("provider-key").value;
-  const current = providerDefaults[providerKey];
-  if (!current) return;
-  document.getElementById("provider-profile-name").value = current.profileName;
-  document.getElementById("provider-model-id").value = current.modelId;
-  document.getElementById("provider-alias").value = current.alias;
-  document.getElementById("provider-api-key").value = "";
-}
-
-async function init() {
-  document.querySelectorAll("[data-view]").forEach((button) => {
-    button.addEventListener("click", () => switchView(button.dataset.view));
-  });
-
-  document.querySelectorAll("[data-config-tab]").forEach((button) => {
-    button.addEventListener("click", () => switchConfigTab(button.dataset.configTab));
-  });
-
-  document.querySelectorAll("[data-action]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      try {
-        await callGateway(button.dataset.action);
-      } catch (error) {
-        setResult(String(error.message || error));
-        await refreshLogs();
-        setBusy(false);
-      }
-    });
-  });
-
-  document.querySelectorAll(".provider-button").forEach((button) => {
-    button.addEventListener("click", () => testProvider(button.dataset.provider));
-  });
-
-  document.getElementById("provider-key").addEventListener("change", syncProviderFormDefaults);
-  document.getElementById("provider-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    try {
-      await createProviderProfile();
-    } catch (error) {
-      setResult(String(error.message || error));
-      await refreshLogs();
-      setBusy(false);
-    }
-  });
-
-  document.getElementById("refresh-status").addEventListener("click", refreshStatus);
-  document.getElementById("refresh-self-check").addEventListener("click", refreshSelfCheck);
-  document.getElementById("refresh-setup-guide").addEventListener("click", refreshSetupGuide);
-  document.getElementById("refresh-profiles").addEventListener("click", refreshProfiles);
-  document.getElementById("refresh-secrets").addEventListener("click", refreshSecrets);
-  document.getElementById("refresh-channels").addEventListener("click", refreshChannels);
-  document.getElementById("refresh-connection-settings").addEventListener("click", refreshConnectionSettings);
-  document.getElementById("refresh-logs").addEventListener("click", refreshLogs);
-  document.getElementById("clear-logs").addEventListener("click", clearLogs);
-
-  document.getElementById("secret-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    try {
-      await saveSecret();
-    } catch (error) {
-      setResult(String(error.message || error));
-      await refreshLogs();
-      setBusy(false);
-    }
-  });
-
-  document.getElementById("clear-secret").addEventListener("click", async () => {
-    try {
-      await deleteSecret(document.getElementById("secret-key").value);
-    } catch (error) {
-      setResult(String(error.message || error));
-      await refreshLogs();
-      setBusy(false);
-    }
-  });
-
-  document.getElementById("test-secret-provider").addEventListener("click", () => {
-    const match = state.secrets.find((item) => item.key === document.getElementById("secret-key").value);
-    if (!match?.providerKey) {
-      setResult("当前选中的不是可直接测试的 Provider 密钥。");
-      return;
-    }
-    testProvider(match.providerKey);
-  });
-
-  document.getElementById("connection-settings-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    try {
-      await saveConnectionSettings();
-    } catch (error) {
-      setResult(String(error.message || error));
-      await refreshLogs();
-      setBusy(false);
-    }
-  });
-
-  document.getElementById("connection-reset-auto").addEventListener("click", async () => {
-    document.getElementById("connection-proxy-override").value = "";
-    try {
-      await saveConnectionSettings();
-    } catch (error) {
-      setResult(String(error.message || error));
-      await refreshLogs();
-      setBusy(false);
-    }
-  });
-
-  document.getElementById("model-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const fileName = document.getElementById("model-file-name").value;
-    const modelId = document.getElementById("model-id").value.trim();
-    const alias = document.getElementById("model-alias").value.trim();
-    const applyNow = document.getElementById("apply-now").checked;
-
-    if (!fileName || !modelId) {
-      setResult("请先选择 Profile 并填写模型 ID。");
-      return;
-    }
-
-    try {
-      setBusy(true, "正在保存模型设置...");
-      const data = await request("/api/profiles/model", {
-        method: "POST",
-        body: JSON.stringify({ fileName, modelId, alias, applyNow }),
-      });
-      setResult(data.message);
-      await Promise.all([refreshProfiles(), refreshStatus(), refreshLogs()]);
-    } catch (error) {
-      setResult(String(error.message || error));
-      await refreshLogs();
-    } finally {
-      setBusy(false);
-    }
-  });
-
-  await Promise.all([
-    refreshStatus(),
-    refreshProfiles(),
-    refreshSecrets(),
-    refreshChannels(),
-    refreshConnectionSettings(),
-    refreshSelfCheck(),
-    refreshSetupGuide(),
-    refreshLogs(),
-  ]);
-  switchView("overview");
-  syncProviderFormDefaults();
-  setResult("等待操作", true);
-
-  window.setInterval(() => {
-    if (!state.busy) {
-      refreshStatus().catch(() => {});
-    }
-  }, 5000);
 }
 
 async function deleteSecret(key) {
@@ -1295,14 +934,14 @@ async function init() {
     }
   });
 
-  document.getElementById("refresh-status").addEventListener("click", refreshStatus);
-  document.getElementById("refresh-self-check").addEventListener("click", refreshSelfCheck);
-  document.getElementById("refresh-setup-guide").addEventListener("click", refreshSetupGuide);
-  document.getElementById("refresh-profiles").addEventListener("click", refreshProfiles);
-  document.getElementById("refresh-secrets").addEventListener("click", refreshSecrets);
-  document.getElementById("refresh-channels").addEventListener("click", refreshChannels);
-  document.getElementById("refresh-connection-settings").addEventListener("click", refreshConnectionSettings);
-  document.getElementById("refresh-logs").addEventListener("click", refreshLogs);
+  document.getElementById("refresh-status").addEventListener("click", () => loadViewData("overview", { force: true }));
+  document.getElementById("refresh-self-check").addEventListener("click", () => loadViewData("overview", { force: true }));
+  document.getElementById("refresh-setup-guide").addEventListener("click", () => loadViewData("overview", { force: true }));
+  document.getElementById("refresh-profiles").addEventListener("click", () => loadViewData("config", { force: true }));
+  document.getElementById("refresh-secrets").addEventListener("click", () => loadViewData("channels", { force: true }));
+  document.getElementById("refresh-channels").addEventListener("click", () => loadViewData("channels", { force: true }));
+  document.getElementById("refresh-connection-settings").addEventListener("click", () => loadViewData("channels", { force: true }));
+  document.getElementById("refresh-logs").addEventListener("click", () => loadViewData("logs", { force: true }));
 
   document.getElementById("secret-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1384,25 +1023,16 @@ async function init() {
     }
   });
 
-  await Promise.all([
-    refreshStatus(),
-    refreshProfiles(),
-    refreshSecrets(),
-    refreshChannels(),
-    refreshConnectionSettings(),
-    refreshSelfCheck(),
-    refreshSetupGuide(),
-    refreshLogs(),
-  ]);
   switchView("overview");
+  await loadViewData("overview", { force: true });
   syncProviderFormDefaults();
   setResult("等待操作", true);
 
   window.setInterval(() => {
-    if (!state.busy) {
+    if (!state.busy && state.currentView === "overview") {
       refreshStatus().catch(() => {});
     }
-  }, 5000);
+  }, 15000);
 }
 
 function renderStatus(data) {
