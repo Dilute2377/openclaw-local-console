@@ -48,6 +48,12 @@ PERMISSION_PRESET_DIRS = [
 DEFAULT_PORT = 8765
 GATEWAY_PORT = 18789
 GATEWAY_HOST = "127.0.0.1"
+PYTHON_FALLBACK_VERSION = "3.12.10"
+PYTHON_FALLBACK_OFFICIAL_URL = f"https://www.python.org/ftp/python/{PYTHON_FALLBACK_VERSION}/python-{PYTHON_FALLBACK_VERSION}-amd64.exe"
+PYTHON_FALLBACK_MIRROR_URL = f"https://mirrors.huaweicloud.com/python/{PYTHON_FALLBACK_VERSION}/python-{PYTHON_FALLBACK_VERSION}-amd64.exe"
+NODE_FALLBACK_VERSION = "24.13.1"
+NODE_FALLBACK_OFFICIAL_URL = f"https://nodejs.org/dist/v{NODE_FALLBACK_VERSION}/node-v{NODE_FALLBACK_VERSION}-x64.msi"
+NODE_FALLBACK_MIRROR_URL = f"https://mirrors.aliyun.com/nodejs-release/v{NODE_FALLBACK_VERSION}/node-v{NODE_FALLBACK_VERSION}-x64.msi"
 
 LOGS: deque[dict] = deque(maxlen=250)
 LOG_LOCK = threading.Lock()
@@ -364,6 +370,87 @@ def save_config(config: dict) -> Path | None:
     backup = backup_config()
     save_json(CONFIG_PATH, sanitize_openclaw_config(config))
     return backup
+
+
+def download_file(url: str, destination: Path, timeout: int = 600) -> dict:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            destination.write_bytes(response.read())
+        return {"ok": True, "path": str(destination), "url": url}
+    except Exception as exc:
+        return {"ok": False, "path": str(destination), "url": url, "error": str(exc)}
+
+
+def install_python_installer(installer_path: Path) -> dict:
+    return run_command(
+        [
+            str(installer_path),
+            "/quiet",
+            "InstallAllUsers=0",
+            "PrependPath=1",
+            "Include_launcher=1",
+        ],
+        timeout=1800,
+    )
+
+
+def install_node_installer(installer_path: Path) -> dict:
+    return run_command(
+        [
+            "msiexec",
+            "/i",
+            str(installer_path),
+            "/qn",
+            "/norestart",
+        ],
+        timeout=1800,
+    )
+
+
+def retry_with_installer_download(*, official_url: str, mirror_url: str, file_name: str, installer_fn) -> dict:
+    with tempfile.TemporaryDirectory(prefix="openclaw-bootstrap-") as temp_dir:
+        temp_path = Path(temp_dir)
+        official_installer = temp_path / file_name
+        official_download = download_file(official_url, official_installer)
+        if official_download["ok"]:
+            official_install = installer_fn(official_installer)
+            if official_install["ok"]:
+                return {
+                    "ok": True,
+                    "message": "Installer download fallback succeeded from the official source.",
+                    "source": "official-installer",
+                    "details": {"download": official_download, "install": official_install},
+                }
+        else:
+            official_install = {"ok": False, "stderr": official_download["error"], "stdout": ""}
+
+        mirror_installer = temp_path / f"mirror-{file_name}"
+        mirror_download = download_file(mirror_url, mirror_installer)
+        if mirror_download["ok"]:
+            mirror_install = installer_fn(mirror_installer)
+            if mirror_install["ok"]:
+                return {
+                    "ok": True,
+                    "message": "Installer download fallback succeeded after retrying with a China mirror.",
+                    "source": "mirror-installer",
+                    "details": {
+                        "official": {"download": official_download, "install": official_install},
+                        "mirror": {"download": mirror_download, "install": mirror_install},
+                    },
+                }
+        else:
+            mirror_install = {"ok": False, "stderr": mirror_download["error"], "stdout": ""}
+
+        return {
+            "ok": False,
+            "message": mirror_install.get("stderr") or official_install.get("stderr") or "Installer fallback failed.",
+            "source": "failed",
+            "details": {
+                "official": {"download": official_download, "install": official_install},
+                "mirror": {"download": mirror_download, "install": mirror_install},
+            },
+        }
 
 
 def normalize_directory_path(value: str) -> str:
@@ -1586,7 +1673,7 @@ def ensure_workspace_skeleton() -> dict:
 def install_python() -> dict:
     if shutil.which("python"):
         return {"ok": True, "message": "Python is already installed."}
-    result = run_command(
+    official_result = run_command(
         [
             get_winget_command(),
             "install",
@@ -1598,14 +1685,28 @@ def install_python() -> dict:
         ],
         timeout=1800,
     )
-    result["message"] = "Python install command executed."
-    return result
+    if official_result["ok"]:
+        official_result["message"] = "Python install command executed with winget."
+        official_result["source"] = "winget"
+        return official_result
+
+    fallback_result = retry_with_installer_download(
+        official_url=PYTHON_FALLBACK_OFFICIAL_URL,
+        mirror_url=PYTHON_FALLBACK_MIRROR_URL,
+        file_name=f"python-{PYTHON_FALLBACK_VERSION}-amd64.exe",
+        installer_fn=install_python_installer,
+    )
+    fallback_result["details"] = {
+        "winget": official_result,
+        "fallback": fallback_result.get("details", {}),
+    }
+    return fallback_result
 
 
 def install_node() -> dict:
     if NODE_EXE.exists() or shutil.which("node"):
         return {"ok": True, "message": "Node.js is already installed."}
-    result = run_command(
+    official_result = run_command(
         [
             get_winget_command(),
             "install",
@@ -1617,8 +1718,22 @@ def install_node() -> dict:
         ],
         timeout=1800,
     )
-    result["message"] = "Node.js install command executed."
-    return result
+    if official_result["ok"]:
+        official_result["message"] = "Node.js install command executed with winget."
+        official_result["source"] = "winget"
+        return official_result
+
+    fallback_result = retry_with_installer_download(
+        official_url=NODE_FALLBACK_OFFICIAL_URL,
+        mirror_url=NODE_FALLBACK_MIRROR_URL,
+        file_name=f"node-v{NODE_FALLBACK_VERSION}-x64.msi",
+        installer_fn=install_node_installer,
+    )
+    fallback_result["details"] = {
+        "winget": official_result,
+        "fallback": fallback_result.get("details", {}),
+    }
+    return fallback_result
 
 
 def install_openclaw() -> dict:

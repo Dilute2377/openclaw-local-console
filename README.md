@@ -87,10 +87,12 @@ The console itself can help with parts of local initialization, but this reposit
 For new users, the local console currently uses this install strategy:
 
 - Python and Node.js install attempts use the default Windows tooling first
+- if Python or Node.js install fails, the console retries with a direct installer flow
+- that installer retry path tries the official download first and then a preset China mirror
 - OpenClaw install tries the default npm registry first
 - if the OpenClaw npm install fails, the console automatically retries with a preset China mirror registry
 
-That means this repo is closer to a "copy the workflow" local starter than a fully zero-dependency installer. The setup helper is intended to make that status visible instead of leaving users guessing.
+That means this repo is closer to a "copy the workflow" local starter than a perfect zero-dependency installer, but the setup helper now makes the missing pieces and fallback behavior much more explicit.
 
 ## Usage guide
 
