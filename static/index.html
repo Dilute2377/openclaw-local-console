@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenClaw 本地控制台</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f766e'/%3E%3Cpath d='M16 20h32v24H16z' fill='%23f8fafc'/%3E%3Ccircle cx='24' cy='32' r='4' fill='%230f172a'/%3E%3Ccircle cx='40' cy='32' r='4' fill='%230f172a'/%3E%3Cpath d='M24 44h16' stroke='%230f172a' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="background-grid"></div>
+    <main class="shell">
+      <header class="masthead panel">
+        <div class="masthead-copy">
+          <p class="eyebrow">OpenClaw Local Console</p>
+          <h1>本地安装、配置、验证和运行控制工作台</h1>
+          <p class="hero-text">
+            这版控制台负责把 OpenClaw 的安装引导、基础初始化、Provider 配置、消息通道配置和 Gateway
+            管理收进一个页面里。目标不是换掉 OpenClaw 的底层结构，而是让日常操作不再分散在脚本、终端和配置文件里。
+          </p>
+        </div>
+        <div class="hero-summary" id="hero-summary">
+          <div class="summary-tile">
+            <span class="summary-label">运行态</span>
+            <strong id="summary-running">读取中</strong>
+          </div>
+          <div class="summary-tile">
+            <span class="summary-label">主模型</span>
+            <strong id="summary-model">读取中</strong>
+          </div>
+          <div class="summary-tile">
+            <span class="summary-label">Provider</span>
+            <strong id="summary-provider">读取中</strong>
+          </div>
+          <div class="summary-tile">
+            <span class="summary-label">通道</span>
+            <strong id="summary-channel">读取中</strong>
+          </div>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <aside class="control-rail">
+          <article class="panel command-panel">
+            <div class="panel-head">
+              <span class="panel-kicker">主控台</span>
+            </div>
+            <p class="panel-hint panel-hint-tight">先用这里控制 OpenClaw 的生命周期，再到右侧完成配置和验证。</p>
+            <div class="command-stack">
+              <button class="action-button action-primary" data-action="start">启动 OpenClaw</button>
+              <button class="action-button" data-action="stop">关闭 OpenClaw</button>
+              <button class="action-button" data-action="restart">重启 OpenClaw</button>
+            </div>
+          </article>
+
+          <article class="panel panel-status">
+            <div class="panel-head">
+              <span class="panel-kicker">运行状态</span>
+              <button class="mini-button" id="refresh-status">刷新</button>
+            </div>
+            <div class="status-line">
+              <span class="status-dot" id="status-dot"></span>
+              <strong id="running-text">读取中</strong>
+            </div>
+            <div class="status-badges" id="status-badges">
+              <span class="badge-item" id="badge-health">健康检查读取中</span>
+              <span class="badge-item" id="badge-profile">当前 Profile 读取中</span>
+            </div>
+            <dl class="metric-list" id="status-metrics"></dl>
+          </article>
+
+          <article class="panel panel-next-step">
+            <div class="panel-head">
+              <span class="panel-kicker">当前步骤</span>
+              <button class="mini-button" id="refresh-setup-guide">刷新</button>
+            </div>
+            <div class="setup-summary" id="setup-summary">
+              <div class="setup-progress-head">
+                <strong id="setup-current-step">正在读取当前步骤</strong>
+                <span id="setup-progress-count">0 / 0</span>
+              </div>
+              <p id="setup-next-note">控制台正在判断你当前最应该先做哪一步。</p>
+              <button class="mini-button setup-primary" id="setup-next-action" type="button">下一步动作</button>
+            </div>
+            <div class="wizard-stepper wizard-stepper-compact" id="wizard-stepper"></div>
+          </article>
+
+          <article class="panel panel-window-note">
+            <div class="panel-head">
+              <span class="panel-kicker">窗口说明</span>
+            </div>
+            <div id="window-note" class="note-card"></div>
+          </article>
+        </aside>
+
+        <section class="content-area">
+          <div class="view-switcher panel">
+            <button class="view-tab active" type="button" data-view="overview">概览</button>
+            <button class="view-tab" type="button" data-view="config">Provider 与模型</button>
+            <button class="view-tab" type="button" data-view="channels">通道与密钥</button>
+            <button class="view-tab" type="button" data-view="logs">日志</button>
+          </div>
+
+          <section class="view-panel active" data-view-panel="overview">
+            <div class="content-row content-row-overview">
+              <article class="panel panel-setup-guide">
+                <div class="panel-head">
+                  <span class="panel-kicker">安装与初始化总向导</span>
+                </div>
+                <p class="panel-hint">
+                  先把环境、基础配置、Provider 和通道都补齐，再继续做 Gateway、Provider 和消息链路的验证。这里会持续告诉你哪一步还没真正闭环。
+                </p>
+                <div id="setup-guide-list" class="check-grid setup-check-grid"></div>
+              </article>
+
+              <article class="panel panel-tests">
+                <div class="panel-head">
+                  <span class="panel-kicker">Provider 最小测试</span>
+                </div>
+                <p class="panel-hint">
+                  每次切模型、改密钥或创建新 Provider 后，都先跑一轮最小测试。这里不做复杂推理，只验证最核心的调用链是否通。
+                </p>
+                <div class="test-grid">
+                  <button class="provider-button" data-provider="google">测 Gemini</button>
+                  <button class="provider-button" data-provider="openai">测 ChatGPT</button>
+                  <button class="provider-button" data-provider="anthropic">测 Claude</button>
+                  <button class="provider-button" data-provider="nvidia-kimi">测 NVIDIA / Kimi</button>
+                  <button class="provider-button" data-provider="minimax">测 MiniMax</button>
+                </div>
+                <pre id="test-result" class="console-output empty">等待操作</pre>
+              </article>
+            </div>
+
+            <article class="panel panel-self-check">
+              <div class="panel-head">
+                <span class="panel-kicker">环境自检</span>
+                <button class="mini-button" id="refresh-self-check">刷新</button>
+              </div>
+              <div id="self-check-grid" class="check-grid compact-check-grid compact-check-grid-tight"></div>
+            </article>
+          </section>
+
+          <section class="view-panel" data-view-panel="config">
+            <div class="config-workspace">
+              <article class="panel panel-profiles">
+                <div class="panel-head">
+                  <span class="panel-kicker">Profile 列表</span>
+                  <button class="mini-button" id="refresh-profiles">刷新</button>
+                </div>
+                <div id="profiles-list" class="profile-list"></div>
+              </article>
+
+              <aside class="config-sidebar">
+                <div class="subview-switcher panel">
+                  <button class="view-tab active" type="button" data-config-tab="provider">新建 Provider</button>
+                  <button class="view-tab" type="button" data-config-tab="model">修改模型</button>
+                </div>
+
+                <article class="panel panel-provider-wizard subview-panel active" data-config-panel="provider" id="provider-wizard-panel">
+                  <div class="panel-head">
+                    <span class="panel-kicker">Provider 向导</span>
+                  </div>
+                  <p class="panel-hint">
+                    新增 Provider 时只填这一张表。需要修改现有模型时，切到右边的“修改模型”。
+                  </p>
+                  <form id="provider-form" class="stack-form">
+                    <label>
+                      <span>Provider</span>
+                      <select id="provider-key">
+                        <option value="google">Gemini</option>
+                        <option value="openai">ChatGPT / OpenAI</option>
+                        <option value="anthropic">Claude</option>
+                        <option value="nvidia-kimi">NVIDIA / Kimi</option>
+                        <option value="minimax">MiniMax</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Profile 名称</span>
+                      <input id="provider-profile-name" type="text" placeholder="例如 claude-work" autocomplete="off" spellcheck="false" />
+                    </label>
+                    <label>
+                      <span>模型 ID</span>
+                      <input id="provider-model-id" type="text" placeholder="例如 gpt-5.4 / gemini-2.5-pro / claude-sonnet-4-6" autocomplete="off" spellcheck="false" />
+                    </label>
+                    <label>
+                      <span>别名</span>
+                      <input id="provider-alias" type="text" placeholder="例如 chatgpt / gemini-pro / claude-sonnet" autocomplete="off" spellcheck="false" />
+                    </label>
+                    <label>
+                      <span>API Key（可选）</span>
+                      <input
+                        id="provider-api-key"
+                        type="password"
+                        placeholder="如果这里填写，控制台会同步保存到对应环境变量"
+                        autocomplete="new-password"
+                      />
+                    </label>
+                    <label class="inline-check">
+                      <input id="provider-apply-now" type="checkbox" checked />
+                      <span>创建后立即应用到当前 OpenClaw</span>
+                    </label>
+                    <label class="inline-check">
+                      <input id="provider-test-now" type="checkbox" checked />
+                      <span>创建后立即做最小连通性测试</span>
+                    </label>
+                    <button class="action-button action-primary" type="submit">创建 Provider Profile</button>
+                  </form>
+                </article>
+
+                <article class="panel panel-model-editor subview-panel" data-config-panel="model">
+                  <div class="panel-head">
+                    <span class="panel-kicker">修改模型</span>
+                  </div>
+                  <p class="panel-hint">
+                    从左侧 Profile 列表点“带入模型表单”后，这里会自动切过来并填好内容。
+                  </p>
+                  <form id="model-form" class="stack-form">
+                    <label>
+                      <span>目标 Profile</span>
+                      <select id="model-file-name"></select>
+                    </label>
+                    <label>
+                      <span>模型 ID</span>
+                      <input id="model-id" type="text" placeholder="例如 gpt-5.4 / gemini-2.5-pro" autocomplete="off" spellcheck="false" />
+                    </label>
+                    <label>
+                      <span>别名</span>
+                      <input id="model-alias" type="text" placeholder="例如 chatgpt / gemini-pro" autocomplete="off" spellcheck="false" />
+                    </label>
+                    <label class="inline-check">
+                      <input id="apply-now" type="checkbox" checked />
+                      <span>保存后立即应用到当前 OpenClaw</span>
+                    </label>
+                    <button class="action-button action-primary" type="submit">保存模型设置</button>
+                  </form>
+                </article>
+              </aside>
+            </div>
+          </section>
+
+          <section class="view-panel" data-view-panel="channels">
+            <div class="content-row content-row-channels">
+              <article class="panel panel-connection">
+                <div class="panel-head">
+                  <span class="panel-kicker">连接设置</span>
+                  <button class="mini-button" id="refresh-connection-settings">刷新</button>
+                </div>
+                <p class="panel-hint">
+                  这里专门管理 Gateway 端口和控制台代理覆盖。保存后会立刻更新状态显示；如果 OpenClaw 正在运行，请重启 Gateway 让新端口或新代理真正生效。
+                </p>
+                <form id="connection-settings-form" class="stack-form compact-form connection-settings-form">
+                  <label>
+                    <span>Gateway 端口</span>
+                    <input id="connection-gateway-port" type="number" min="1" max="65535" placeholder="默认 18789" autocomplete="off" spellcheck="false" />
+                  </label>
+                  <label>
+                    <span>代理覆盖</span>
+                    <input id="connection-proxy-override" type="text" placeholder="例如 http://127.0.0.1:7890" autocomplete="off" spellcheck="false" />
+                  </label>
+                  <label>
+                    <span>Agent 超时（秒）</span>
+                    <input id="connection-timeout-seconds" type="number" min="0" max="7200" placeholder="推荐 600；0 表示不限制" autocomplete="off" spellcheck="false" />
+                  </label>
+                  <div class="connection-meta" id="connection-settings-meta"></div>
+                  <div class="inline-actions">
+                    <button class="action-button action-primary" type="submit">保存连接设置</button>
+                    <button class="mini-button" type="button" id="connection-reset-auto">恢复自动识别</button>
+                  </div>
+                </form>
+              </article>
+              <article class="panel panel-secrets">
+                <div class="panel-head">
+                  <span class="panel-kicker">密钥管理</span>
+                  <button class="mini-button" id="refresh-secrets">刷新</button>
+                </div>
+                <div class="secret-editor-shell">
+                  <form id="secret-form" class="stack-form compact-form secret-editor-form">
+                    <label>
+                      <span>目标密钥</span>
+                      <select id="secret-key"></select>
+                    </label>
+                    <label>
+                      <span>填入或覆盖</span>
+                      <input id="secret-value" type="password" placeholder="在这里粘贴新的密钥或 App Secret" autocomplete="new-password" />
+                    </label>
+                    <div class="inline-actions">
+                      <button class="action-button action-primary" type="submit">保存密钥</button>
+                      <button class="mini-button" type="button" id="clear-secret">清空当前项</button>
+                      <button class="mini-button" type="button" id="test-secret-provider">测试对应 Provider</button>
+                    </div>
+                  </form>
+                </div>
+                <div id="secrets-list" class="secret-list"></div>
+              </article>
+
+              <article class="panel panel-channels" id="channels-panel">
+                <div class="panel-head">
+                  <span class="panel-kicker">通道配置中心</span>
+                  <button class="mini-button" id="refresh-channels">刷新</button>
+                </div>
+                <div id="channels-list" class="channel-grid"></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="view-panel" data-view-panel="logs">
+            <article class="panel panel-logs">
+              <div class="panel-head">
+                <span class="panel-kicker">最近操作</span>
+                <div class="inline-actions">
+                  <button class="mini-button" id="clear-logs" type="button">清空</button>
+                  <button class="mini-button" id="refresh-logs">刷新</button>
+                </div>
+              </div>
+              <div id="logs-list" class="logs-list"></div>
+            </article>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+    <script src="/overrides.js?v=20260311h"></script>
+  </body>
+</html>
