@@ -230,6 +230,21 @@ def backup_config() -> Path | None:
     return backup
 
 
+def get_subprocess_kwargs(*, allow_console: bool = False) -> dict:
+    kwargs: dict = {}
+    if os.name != "nt" or allow_console:
+        return kwargs
+
+    kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    startupinfo_cls = getattr(subprocess, "STARTUPINFO", None)
+    if startupinfo_cls:
+        startupinfo = startupinfo_cls()
+        startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+        startupinfo.wShowWindow = 0
+        kwargs["startupinfo"] = startupinfo
+    return kwargs
+
+
 def run_command(args: list[str], timeout: int = 60) -> dict:
     try:
         completed = subprocess.run(
@@ -240,6 +255,7 @@ def run_command(args: list[str], timeout: int = 60) -> dict:
             errors="replace",
             timeout=timeout,
             shell=False,
+            **get_subprocess_kwargs(),
         )
         return {
             "ok": completed.returncode == 0,
@@ -396,6 +412,7 @@ def create_directory_junction(link_path: Path, target_path: Path) -> None:
         encoding="utf-8",
         errors="replace",
         timeout=30,
+        **get_subprocess_kwargs(),
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or "创建目录映射失败。"
@@ -412,6 +429,7 @@ def remove_directory_junction(link_path: Path) -> None:
         encoding="utf-8",
         errors="replace",
         timeout=30,
+        **get_subprocess_kwargs(),
     )
     if result.returncode != 0 and link_path.exists():
         detail = result.stderr.strip() or result.stdout.strip() or "移除目录映射失败。"
@@ -2514,6 +2532,7 @@ def install_skill_from_repo(repo_url: str) -> dict:
             encoding="utf-8",
             errors="replace",
             timeout=120,
+            **get_subprocess_kwargs(),
         )
         if result.returncode != 0:
             detail = result.stderr.strip() or result.stdout.strip() or "git clone 失败。"
@@ -2722,6 +2741,7 @@ Write-Output $json
         encoding="utf-8",
         errors="replace",
         timeout=120,
+        **get_subprocess_kwargs(),
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or "本地路径选择失败。"
