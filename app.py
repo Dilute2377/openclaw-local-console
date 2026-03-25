@@ -292,8 +292,9 @@ def run_command(args: list[str], timeout: int = 60, env: dict | None = None) -> 
 
 
 def get_openclaw_cli() -> str:
-    if OPENCLAW_CMD.exists():
-        return str(OPENCLAW_CMD)
+    resolved = resolve_openclaw_cli_path()
+    if resolved:
+        return resolved
     return shutil.which("openclaw") or "openclaw"
 
 
@@ -321,6 +322,29 @@ def get_npm_command() -> str:
     return resolve_npm_command()
 
 
+def has_npm_command() -> bool:
+    command = get_npm_command()
+    command_path = Path(command)
+    if command_path.exists():
+        return True
+    return bool(shutil.which("npm") or shutil.which("npm.cmd"))
+
+
+def resolve_openclaw_from_npm_prefix() -> str | None:
+    if not has_npm_command():
+        return None
+    prefix_result = run_command([get_npm_command(), "prefix", "-g"], timeout=20)
+    if not prefix_result["ok"] or not prefix_result["stdout"]:
+        return None
+    prefix = Path(prefix_result["stdout"].splitlines()[-1].strip())
+    if not prefix.exists():
+        return None
+    for candidate in [prefix / "openclaw.cmd", prefix / "openclaw.exe", prefix / "openclaw"]:
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
 def resolve_openclaw_cli_path() -> str | None:
     candidates = [
         str(OPENCLAW_CMD),
@@ -333,7 +357,7 @@ def resolve_openclaw_cli_path() -> str | None:
         path = Path(item)
         if path.exists():
             return str(path)
-    return None
+    return resolve_openclaw_from_npm_prefix()
 
 
 def get_secret(name: str) -> str:
@@ -918,8 +942,29 @@ def get_gateway_pids() -> list[int]:
     return pids
 
 
+def get_process_name(pid: int) -> str:
+    result = run_command(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"], timeout=10)
+    if not result["ok"] or not result["stdout"]:
+        return ""
+    line = result["stdout"].splitlines()[0].strip()
+    if not line or "No tasks are running" in line:
+        return ""
+    if line.startswith('"'):
+        parts = [part.strip().strip('"') for part in line.split('","')]
+        if parts:
+            return parts[0]
+    return ""
+
+
+def get_gateway_occupants() -> list[dict]:
+    occupants: list[dict] = []
+    for pid in get_gateway_pids():
+        occupants.append({"pid": pid, "name": get_process_name(pid) or "unknown"})
+    return occupants
+
+
 def gateway_health() -> dict:
-    if not shutil.which(get_openclaw_cli()) and not OPENCLAW_CMD.exists():
+    if not resolve_openclaw_cli_path():
         return {"ok": False, "message": "OpenClaw CLI is not installed."}
     result = run_command([get_openclaw_cli(), "gateway", "health"], timeout=15)
     if result["ok"]:
@@ -947,7 +992,14 @@ def start_gateway() -> dict:
     if not openclaw_cli:
         return {"ok": False, "message": "OpenClaw CLI is missing. Install OpenClaw first, then retry."}
     if is_port_open():
-        return {"ok": True, "message": "OpenClaw is already running."}
+        health = gateway_health()
+        if health["ok"]:
+            return {"ok": True, "message": "OpenClaw is already running."}
+        return {
+            "ok": False,
+            "message": f"Gateway port {gateway_port} is occupied, but OpenClaw health check failed. Please free the port or change the Gateway port.",
+            "details": {"occupants": get_gateway_occupants(), "health": health},
+        }
 
     command = [
         "powershell",
@@ -1604,14 +1656,19 @@ def get_status() -> dict:
     bind = ((config.get("gateway") or {}).get("bind") or "loopback")
     gateway_port = get_gateway_port(config)
     pids = get_gateway_pids()
-    health = gateway_health() if pids or is_port_open() else {"ok": False, "message": "Gateway is not running."}
+    port_open = is_port_open()
+    health = gateway_health() if pids or port_open else {"ok": False, "message": "Gateway is not running."}
+    running = health["ok"] if (pids or port_open) else False
+    port_occupied = port_open and not running
     providers = get_provider_status()
     proxy_info = get_proxy_info()
     return {
-        "running": bool(pids or is_port_open()),
+        "running": running,
         "port": gateway_port,
         "bind": bind,
         "pids": pids,
+        "portOccupied": port_occupied,
+        "occupants": get_gateway_occupants() if port_occupied else [],
         "primaryModel": primary_model,
         "activeProfile": get_active_profile(primary_model),
         "timeoutSeconds": get_agent_timeout_seconds(config),
@@ -1630,14 +1687,14 @@ def self_check() -> dict:
     proxy_info = get_proxy_info()
     return {
         "pythonAvailable": bool(shutil.which("python")),
-        "openclawAvailable": bool(shutil.which("openclaw") or OPENCLAW_CMD.exists()),
+        "openclawAvailable": bool(resolve_openclaw_cli_path()),
         "nodeExists": NODE_EXE.exists() or bool(shutil.which("node")),
-        "npmAvailable": bool(shutil.which("npm")),
+        "npmAvailable": has_npm_command(),
         "wingetAvailable": bool(shutil.which("winget")),
         "configExists": CONFIG_PATH.exists(),
         "profileDirExists": PROFILES_DIR.exists(),
         "gatewayScriptExists": (OPENCLAW_ROOT / "gateway.cmd").exists(),
-        "openclawDistExists": OPENCLAW_DIST.exists(),
+        "openclawDistExists": OPENCLAW_DIST.exists() or bool(resolve_openclaw_cli_path()),
         "profilesCount": len(get_profiles()),
         "primaryModel": primary_model,
         "gatewayPort": get_gateway_port(config),
@@ -1778,7 +1835,7 @@ def install_node() -> dict:
 
 
 def install_openclaw() -> dict:
-    if OPENCLAW_CMD.exists() or shutil.which("openclaw"):
+    if resolve_openclaw_cli_path():
         return {"ok": True, "message": "OpenClaw is already installed."}
     if not (NODE_EXE.exists() or shutil.which("node")):
         node_result = install_node()
@@ -1808,10 +1865,18 @@ def install_openclaw() -> dict:
                 message = f"OpenClaw installation completed after retrying with the {source_name} registry."
             else:
                 message = "OpenClaw installation completed from the default npm registry."
+            cli_path = resolve_openclaw_cli_path()
+            if not cli_path:
+                return {
+                    "ok": False,
+                    "message": "OpenClaw package installed, but CLI path is still not discoverable. Please reopen the console and retry.",
+                    "details": {"npmCommand": npm_command, "attempts": attempts},
+                    "source": "partial",
+                }
             return {
                 "ok": True,
                 "message": message,
-                "details": {"npmCommand": npm_command, "attempts": attempts},
+                "details": {"npmCommand": npm_command, "attempts": attempts, "cliPath": cli_path},
                 "source": source_name,
             }
 
