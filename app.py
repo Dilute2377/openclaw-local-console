@@ -36,6 +36,7 @@ OPENCLAW_NPM_ROOT = OPENCLAW_CMD.parent
 OPENCLAW_PACKAGE_DIR = OPENCLAW_NPM_ROOT / "node_modules" / "openclaw"
 NODE_EXE = Path(r"C:\Program Files\nodejs\node.exe")
 OPENCLAW_DIST = Path.home() / "AppData" / "Roaming" / "npm" / "node_modules" / "openclaw" / "dist" / "index.js"
+NODEJS_DEFAULT_DIR = Path(r"C:\Program Files\nodejs")
 AGENTS_SKILLS_DIR = Path.home() / ".agents" / "skills"
 CODEX_SKILLS_DIR = Path.home() / ".codex" / "skills"
 PERMISSION_MOUNTS_DIR = WORKSPACE_DIR / "_allowed"
@@ -280,6 +281,14 @@ def run_command(args: list[str], timeout: int = 60, env: dict | None = None) -> 
             "stdout": (exc.stdout or "").strip(),
             "stderr": ((exc.stderr or "").strip() + "\nCommand timed out.").strip(),
         }
+    except FileNotFoundError as exc:
+        missing = (args[0] if args else "command").strip()
+        return {
+            "ok": False,
+            "returncode": 127,
+            "stdout": "",
+            "stderr": f"Command not found: {missing}. {exc}",
+        }
 
 
 def get_openclaw_cli() -> str:
@@ -292,8 +301,39 @@ def get_winget_command() -> str:
     return shutil.which("winget") or "winget"
 
 
+def resolve_npm_command() -> str:
+    candidates = [
+        shutil.which("npm"),
+        shutil.which("npm.cmd"),
+        str(NODEJS_DEFAULT_DIR / "npm.cmd"),
+        str(NODEJS_DEFAULT_DIR / "npm.exe"),
+    ]
+    for item in candidates:
+        if not item:
+            continue
+        path = Path(item)
+        if path.exists():
+            return str(path)
+    return "npm"
+
+
 def get_npm_command() -> str:
-    return shutil.which("npm") or "npm"
+    return resolve_npm_command()
+
+
+def resolve_openclaw_cli_path() -> str | None:
+    candidates = [
+        str(OPENCLAW_CMD),
+        shutil.which("openclaw"),
+        shutil.which("openclaw.cmd"),
+    ]
+    for item in candidates:
+        if not item:
+            continue
+        path = Path(item)
+        if path.exists():
+            return str(path)
+    return None
 
 
 def get_secret(name: str) -> str:
@@ -903,8 +943,9 @@ def gateway_health() -> dict:
 
 def start_gateway() -> dict:
     gateway_port = get_gateway_port()
-    if not NODE_EXE.exists() or not OPENCLAW_DIST.exists():
-        return {"ok": False, "message": "Missing node.exe or OpenClaw dist entry; cannot start Gateway."}
+    openclaw_cli = resolve_openclaw_cli_path()
+    if not openclaw_cli:
+        return {"ok": False, "message": "OpenClaw CLI is missing. Install OpenClaw first, then retry."}
     if is_port_open():
         return {"ok": True, "message": "OpenClaw is already running."}
 
@@ -913,8 +954,8 @@ def start_gateway() -> dict:
         "-NoProfile",
         "-Command",
         (
-            f"Start-Process -FilePath '{NODE_EXE}' "
-            f"-ArgumentList @('{OPENCLAW_DIST}','gateway','--port','{gateway_port}') "
+            f"Start-Process -FilePath '{openclaw_cli}' "
+            f"-ArgumentList @('gateway','--port','{gateway_port}') "
             f"-WorkingDirectory '{OPENCLAW_ROOT}' -WindowStyle Hidden"
         ),
     ]
@@ -1744,40 +1785,46 @@ def install_openclaw() -> dict:
         if not node_result["ok"]:
             return {"ok": False, "message": "Node.js install failed, so OpenClaw installation cannot continue.", "details": node_result}
 
-    official_result = run_command([get_npm_command(), "install", "-g", "openclaw@latest"], timeout=1800)
-    if official_result["ok"]:
-        return {
-            "ok": True,
-            "message": "OpenClaw installation completed from the default npm registry.",
-            "details": official_result,
-            "source": "official",
-        }
+    npm_command = get_npm_command()
+    npm_registries: list[tuple[str, str | None]] = [
+        ("official", None),
+        ("npmmirror", "https://registry.npmmirror.com"),
+        ("tencent", "https://mirrors.cloud.tencent.com/npm/"),
+    ]
 
-    fallback_registry = "https://registry.npmmirror.com"
-    fallback_result = run_command(
-        [get_npm_command(), "install", "-g", "openclaw@latest"],
-        timeout=1800,
-        env={"npm_config_registry": fallback_registry},
-    )
-    if fallback_result["ok"]:
-        return {
-            "ok": True,
-            "message": "OpenClaw installation completed after retrying with a China mirror registry.",
-            "details": {
-                "official": official_result,
-                "fallback": fallback_result,
-                "fallbackRegistry": fallback_registry,
-            },
-            "source": "fallback",
-        }
+    attempts = []
+    for source_name, registry in npm_registries:
+        env = {"npm_config_registry": registry} if registry else None
+        result = run_command([npm_command, "install", "-g", "openclaw@latest"], timeout=1800, env=env)
+        attempts.append(
+            {
+                "source": source_name,
+                "registry": registry or "default",
+                "result": result,
+            }
+        )
+        if result["ok"]:
+            if registry:
+                message = f"OpenClaw installation completed after retrying with the {source_name} registry."
+            else:
+                message = "OpenClaw installation completed from the default npm registry."
+            return {
+                "ok": True,
+                "message": message,
+                "details": {"npmCommand": npm_command, "attempts": attempts},
+                "source": source_name,
+            }
+
+    last_error = ""
+    for item in reversed(attempts):
+        candidate = item["result"].get("stderr") or item["result"].get("stdout") or ""
+        if candidate:
+            last_error = candidate
+            break
     return {
         "ok": False,
-        "message": fallback_result["stderr"] or official_result["stderr"] or "OpenClaw installation failed.",
-        "details": {
-            "official": official_result,
-            "fallback": fallback_result,
-            "fallbackRegistry": fallback_registry,
-        },
+        "message": last_error or "OpenClaw installation failed on all configured registries.",
+        "details": {"npmCommand": npm_command, "attempts": attempts},
         "source": "failed",
     }
 
